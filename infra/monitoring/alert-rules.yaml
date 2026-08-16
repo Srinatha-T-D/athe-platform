@@ -1,0 +1,53 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: athe-alerts
+  namespace: athe
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: athe.business
+      rules:
+        - alert: ATHENoOrdersInLastHour
+          expr: increase(athe_orders_created_total[1h]) == 0
+          for: 30m
+          labels: { severity: warning }
+          annotations:
+            summary: "No orders placed in the last hour"
+            description: "Storefront checkout may be broken, or it's genuinely quiet — check the dashboard."
+
+        - alert: ATHELoginFailureSpike
+          expr: increase(athe_login_failures_total[10m]) > 20
+          for: 5m
+          labels: { severity: critical }
+          annotations:
+            summary: "Spike in failed admin/staff logins"
+            description: "More than 20 failed logins in 10 minutes — possible credential-stuffing attempt."
+
+    - name: athe.reliability
+      rules:
+        - alert: ATHEHighErrorRate
+          expr: |
+            sum(rate(athe_http_request_duration_seconds_count{status_code=~"5.."}[5m]))
+            /
+            sum(rate(athe_http_request_duration_seconds_count[5m])) > 0.05
+          for: 10m
+          labels: { severity: critical }
+          annotations:
+            summary: "Backend 5xx rate above 5%"
+            description: "Check recent deploys and pod logs for athe-backend."
+
+        - alert: ATHEBackendPodsDown
+          expr: kube_deployment_status_replicas_available{namespace="athe", deployment="athe-backend"} < 1
+          for: 2m
+          labels: { severity: critical }
+          annotations:
+            summary: "No healthy athe-backend pods"
+
+        - alert: ATHEHighLatency
+          expr: histogram_quantile(0.95, sum(rate(athe_http_request_duration_seconds_bucket[5m])) by (le)) > 1.5
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "p95 API latency above 1.5s"

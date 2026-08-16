@@ -1,0 +1,65 @@
+{
+  "title": "ATHE — Business & Platform Overview",
+  "uid": "athe-overview",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-24h", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "title": "Orders (24h)", "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 6 },
+      "targets": [{ "expr": "increase(athe_orders_created_total[24h])", "refId": "A" }]
+    },
+    {
+      "id": 2, "title": "Revenue (24h, INR)", "type": "stat",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 6 },
+      "targets": [{ "expr": "increase(athe_revenue_total_inr[24h])", "refId": "A" }]
+    },
+    {
+      "id": 3, "title": "API 5xx Error Rate", "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 6 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "thresholds": { "steps": [
+        { "color": "green", "value": null }, { "color": "red", "value": 0.05 }
+      ] } } },
+      "targets": [{
+        "expr": "sum(rate(athe_http_request_duration_seconds_count{status_code=~\"5..\"}[5m])) / sum(rate(athe_http_request_duration_seconds_count[5m]))",
+        "refId": "A"
+      }]
+    },
+    {
+      "id": 4, "title": "p95 API Latency", "type": "stat",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 6 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, sum(rate(athe_http_request_duration_seconds_bucket[5m])) by (le))",
+        "refId": "A"
+      }]
+    },
+    {
+      "id": 5, "title": "Orders Over Time", "type": "timeseries",
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 },
+      "targets": [{ "expr": "increase(athe_orders_created_total[15m])", "refId": "A", "legendFormat": "orders / 15m" }]
+    },
+    {
+      "id": 6, "title": "Revenue Over Time", "type": "timeseries",
+      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 },
+      "targets": [{ "expr": "increase(athe_revenue_total_inr[15m])", "refId": "A", "legendFormat": "₹ / 15m" }]
+    },
+    {
+      "id": 7, "title": "Backend Pods Available", "type": "timeseries",
+      "gridPos": { "x": 0, "y": 14, "w": 8, "h": 7 },
+      "targets": [{ "expr": "kube_deployment_status_replicas_available{namespace=\"athe\", deployment=\"athe-backend\"}", "refId": "A" }]
+    },
+    {
+      "id": 8, "title": "Login Failures (security)", "type": "timeseries",
+      "gridPos": { "x": 8, "y": 14, "w": 8, "h": 7 },
+      "targets": [{ "expr": "increase(athe_login_failures_total[15m])", "refId": "A" }]
+    },
+    {
+      "id": 9, "title": "CPU Usage — athe namespace", "type": "timeseries",
+      "gridPos": { "x": 16, "y": 14, "w": 8, "h": 7 },
+      "targets": [{ "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"athe\"}[5m])) by (pod)", "refId": "A" }]
+    }
+  ]
+}

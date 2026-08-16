@@ -1,0 +1,21 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: { name: athe-backend-hpa, namespace: athe }
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: athe-backend }
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 65 } }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: { name: athe-storefront-hpa, namespace: athe }
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: athe-storefront }
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }

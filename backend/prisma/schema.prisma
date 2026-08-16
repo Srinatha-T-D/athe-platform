@@ -1,0 +1,173 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  STAFF
+}
+
+enum DeliveryType {
+  STALL
+  HOME
+}
+
+enum OrderStatus {
+  PLACED
+  PRINTING
+  READY
+  OUT
+  DELIVERED
+}
+
+enum DiscountKind {
+  PERCENT
+  FLAT
+}
+
+enum CancelledBy {
+  CUSTOMER
+  STAFF
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(STAFF)
+  createdAt    DateTime @default(now())
+}
+
+// Garment styles (T-Shirt, Hoodie, or whatever's trending this season) are
+// admin-managed rather than a hardcoded pair - add/remove from the admin
+// Products tab. `id` is a client-supplied slug (e.g. "oversized"), not a
+// generated uuid, so it round-trips cleanly with the frontend's optimistic
+// local state.
+model ProductType {
+  id         String   @id
+  name       String
+  silhouette String   // "tshirt" | "hoodie" - which placeholder art/hood shape to draw
+  createdAt  DateTime @default(now())
+}
+
+model Product {
+  id        String   @id @default(uuid())
+  name      String
+  type      String   // ProductType.id - kept as a plain string (not a FK) so
+                      // deleting a type never blocks or cascades into products
+  category  String   // men | women | unisex
+  price     Int      @default(0)
+  isNew     Boolean  @default(false)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  variants  ProductVariant[]
+}
+
+// Per-product, per-colour, per-size stock. This is the actual sellable
+// inventory - the storefront can't check out a colour/size once it's 0 here.
+model ProductVariant {
+  id        String  @id @default(uuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  color     String  // colour id, e.g. "white", "black" (see the shared GARMENT_COLORS palette)
+  size      String  // "S" | "M" | "L" | "XL" | "XXL"
+  stock     Int     @default(0)
+
+  @@unique([productId, color, size])
+}
+
+// Real garment photography, one per (type, colour) pair, shown on the
+// storefront instead of the flat placeholder shape. Independent of stock -
+// a colour can be photographed without having any stock yet, or vice versa.
+model GarmentPhoto {
+  id        String   @id @default(uuid())
+  typeId    String   // ProductType.id
+  color     String   // colour id
+  photoUrl  String
+  updatedAt DateTime @updatedAt
+
+  @@unique([typeId, color])
+}
+
+model Design {
+  id        String   @id @default(uuid())
+  name      String
+  tag       String
+  audience  String   @default("all") // all | men | women | unisex - who it's shown to
+  imageUrl  String?  // S3 object URL for uploaded designs
+  trending  Boolean  @default(false)
+  active    Boolean  @default(true)
+  pending   Boolean  @default(false) // true until admin reviews a customer upload
+  createdAt DateTime @default(now())
+}
+
+model DeliveryZone {
+  id      String @id @default(uuid())
+  pincode String @unique
+  km      Int
+  fee     Int
+}
+
+model Coupon {
+  id          String       @id @default(uuid())
+  code        String       @unique
+  label       String       // shown to customers, e.g. "20% off everything"
+  kind        DiscountKind
+  value       Int          // percent (0-100) if kind=PERCENT, rupees if kind=FLAT
+  minSubtotal Int          @default(0)
+  maxDiscount Int          // cap on the discount, in rupees
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Order {
+  id            String       @id @default(uuid())
+  code          String       @unique // e.g. ATHE-2026-0001
+  customerName  String
+  customerPhone String
+  customerEmail String
+  deliveryType  DeliveryType
+  addressLine   String?
+  pincode       String?
+  status        OrderStatus  @default(PLACED)
+  subtotal      Int
+  deliveryFee   Int          @default(0)
+  discountCode   String?
+  discountAmount Int         @default(0)
+  total         Int
+  paid          Boolean      @default(false)
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  // Cancellation is tracked independently of `status` (which stays frozen
+  // at whatever it was when cancelled) - see the eligibility rule in
+  // routes/orders.js: freely cancellable before printing starts; once
+  // printing has begun, only an unpaid (pay-at-pickup) order can still be
+  // cancelled by the customer, and always with a reason.
+  cancelled     Boolean      @default(false)
+  cancelReason  String?
+  cancelledBy   CancelledBy?
+  cancelledAt   DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  items         OrderItem[]
+}
+
+model OrderItem {
+  id        String  @id @default(uuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  designId  String
+  color     String
+  size      String
+  qty       Int
+  price     Int
+}

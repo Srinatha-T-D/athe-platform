@@ -1,0 +1,62 @@
+# Install with:
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#     -n monitoring --create-namespace -f infra/monitoring/prometheus-values.yaml
+
+grafana:
+  enabled: true
+  adminPassword: "" # leave blank + set via --set on install, or use External Secrets
+  defaultDashboardsEnabled: true
+  ingress:
+    enabled: true
+    ingressClassName: alb
+    annotations:
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/certificate-arn: <ACM_CERT_ARN>
+    hosts: ["grafana.athe.example.com"]
+  persistence:
+    enabled: true
+    size: 5Gi
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: athe
+          orgId: 1
+          folder: ATHE
+          type: file
+          options: { path: /var/lib/grafana/dashboards/athe }
+  dashboardsConfigMaps:
+    athe: athe-grafana-dashboards   # created from grafana-dashboard-athe.json via kubectl create configmap
+
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    resources:
+      requests: { cpu: 250m, memory: 512Mi }
+      limits: { cpu: "1", memory: 1Gi }
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources: { requests: { storage: 20Gi } }
+    # picks up our ServiceMonitor in the athe namespace (infra/k8s/servicemonitor.yaml)
+    serviceMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    additionalRuleLabels:
+      release: kube-prometheus-stack
+
+alertmanager:
+  config:
+    route:
+      receiver: "athe-slack"
+      routes:
+        - matchers: ["severity = critical"]
+          receiver: "athe-slack"
+    receivers:
+      - name: "athe-slack"
+        slack_configs:
+          - api_url: "<SLACK_WEBHOOK_URL>"
+            channel: "#athe-alerts"
+            send_resolved: true

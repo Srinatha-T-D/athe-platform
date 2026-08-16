@@ -1,0 +1,91 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: athe
+      POSTGRES_PASSWORD: athe
+      POSTGRES_DB: athe
+    volumes: ["athe_pg_data:/var/lib/postgresql/data"]
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://athe:athe@postgres:5432/athe?schema=public
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      AWS_REGION: ${AWS_REGION}
+      UPLOADS_BUCKET: ${UPLOADS_BUCKET}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET}
+      PORT: 4000
+      NODE_ENV: production
+    ports: ["4000:4000"]
+    depends_on: [postgres]
+    command: sh -c "npx prisma migrate deploy && node src/index.js"
+
+  storefront:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args: { APP_DIR: storefront, VITE_API_BASE_URL: "${VITE_API_BASE_URL}" }
+    restart: unless-stopped
+    depends_on: [backend]
+
+  admin:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args: { APP_DIR: admin, VITE_API_BASE_URL: "${VITE_API_BASE_URL}" }
+    restart: unless-stopped
+    ports: ["8081:8080"]
+    depends_on: [backend]
+
+  staff:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args: { APP_DIR: staff, VITE_API_BASE_URL: "${VITE_API_BASE_URL}" }
+    restart: unless-stopped
+    ports: ["8082:8080"]
+    depends_on: [backend]
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    volumes:
+      - ./infra/free-tier/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - athe_prom_data:/prometheus
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=15d"]
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-changeme}
+      GF_INSTALL_PLUGINS: ""
+    volumes:
+      - athe_grafana_data:/var/lib/grafana
+      - ./infra/free-tier/grafana-provisioning:/etc/grafana/provisioning:ro
+    depends_on: [prometheus]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/free-tier/Caddyfile:/etc/caddy/Caddyfile:ro
+      - athe_caddy_data:/data
+      - athe_caddy_config:/config
+    depends_on: [storefront, admin, staff, backend]
+
+volumes:
+  athe_pg_data:
+  athe_prom_data:
+  athe_grafana_data:
+  athe_caddy_data:
+  athe_caddy_config:

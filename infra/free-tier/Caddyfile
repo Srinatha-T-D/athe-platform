@@ -1,0 +1,32 @@
+shop.athe.space {
+    reverse_proxy storefront:8080
+}
+
+admin.athe.space {
+    reverse_proxy admin:8080
+}
+
+staff.athe.space {
+    reverse_proxy staff:8080
+}
+
+api.athe.space {
+    reverse_proxy backend:4000
+}
+
+grafana.athe.space {
+    reverse_proxy grafana:3000
+}
+
+# Prometheus has no login of its own, so Caddy adds one here.
+# Password hash generated on the server - see infra/free-tier/DEPLOY.md
+prometheus.athe.space {
+    basicauth {
+        admin $2a$14$hbcMYgJ5Tezjdz.S1ElgZ.ojZXc67k7521NOwlJycfB7vsgEOZWt6
+    }
+    reverse_proxy prometheus:9090
+}
+
+athe.space {
+    redir https://shop.athe.space{uri}
+}

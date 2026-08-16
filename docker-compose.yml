@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: athe
+      POSTGRES_PASSWORD: athe
+      POSTGRES_DB: athe
+    ports: ["5432:5432"]
+    volumes: ["athe_pg_data:/var/lib/postgresql/data"]
+
+  backend:
+    build: ./backend
+    env_file: ./backend/.env.example
+    environment:
+      DATABASE_URL: postgresql://athe:athe@postgres:5432/athe?schema=public
+    ports: ["4000:4000"]
+    depends_on: [postgres]
+
+volumes:
+  athe_pg_data:
